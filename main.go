@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -26,24 +27,68 @@ func main() {
 }
 
 func (g *Game) run() {
-	//c := g.Config
 	for {
-		var i int
-		var err error
-		for {
-			err, i = g.getInput("enter move")
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-
-			if i >= (len(g.Board) / 2) {
-				fmt.Println("move invalid")
-				continue
-			}
-			break
-		}
+		i := g.getMove()
+		g.processMove(i)
 		g.render()
+	}
+}
+
+func (g *Game) processMove(m int) {
+	side := g.Config.CellsPerSide
+	p1Store := side
+	p2Store := (side * 2) + 1
+	speed := time.Millisecond * time.Duration(190)
+	var oppStore, currentStore int
+
+	if g.Turn == 1 {
+		oppStore = p2Store
+		currentStore = p1Store
+	} else {
+		oppStore = p1Store
+		currentStore = p2Store
+	}
+
+	hand := g.Board[m]
+	g.Board[m] = 0
+	g.render()
+	time.Sleep(speed)
+
+	current := m
+
+	for hand > 0 {
+		current++
+
+		if current >= len(g.Board) {
+			current = 0
+		}
+
+		if current == oppStore {
+			continue
+		}
+
+		g.Board[current]++
+		hand--
+
+		g.render()
+		time.Sleep(speed)
+	}
+
+	if current != oppStore && current != currentStore {
+
+		if g.Board[g.oppIndex(current)] != 0 && g.Board[current] == 1 {
+			g.Board[currentStore] = g.Board[currentStore] + g.Board[g.oppIndex(current)] + g.Board[current]
+			g.Board[g.oppIndex(current)] = 0
+			g.Board[current] = 0
+		}
+	}
+
+	if current != currentStore {
+		if g.Turn == 1 {
+			g.Turn = 2
+		} else {
+			g.Turn = 1
+		}
 	}
 }
 
@@ -52,8 +97,10 @@ func (g *Game) initGame() {
 	c := g.Config
 	g.Turn = 1
 
+	g.clearScreen()
+
 	for {
-		err, input := g.getInput("enter desired cells per side")
+		err, input := g.getInt("enter desired cells per side")
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -69,8 +116,9 @@ func (g *Game) initGame() {
 	p1Pot := c.CellsPerSide
 	p2Pot := totalCells - 1
 
+	g.clearScreen()
 	for {
-		err, input := g.getInput("enter desired stones per cell")
+		err, input := g.getInt("enter desired stones per cell")
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -87,8 +135,7 @@ func (g *Game) initGame() {
 	g.render()
 }
 
-func oppIndex(n int) int {
-	g := &Game{}
+func (g *Game) oppIndex(n int) int {
 	o := len(g.Board) - 2 - n
 	return o
 }
@@ -123,18 +170,18 @@ func (g *Game) render() {
 	fmt.Print("⌊  ⌋\n\n")
 }
 
-func (g *Game) getInput(m string) (error, int) {
-	reader := bufio.NewReader(os.Stdin)
-
+func (g *Game) getInt(m string) (error, int) {
 	for {
-		fmt.Printf("%s\n", m)
-		i, _ := reader.ReadString('\n')
+		i := g.getInput(m)
 
-		i = strings.TrimSpace(i)
+		if i == "q" {
+			fmt.Println("terminated")
+			os.Exit(0)
+		}
 
 		input, err := strconv.Atoi(i)
 
-		if err != nil || input < 0 {
+		if err != nil || input < 1 {
 			fmt.Println("input error. try again")
 			continue
 		}
@@ -143,6 +190,42 @@ func (g *Game) getInput(m string) (error, int) {
 	}
 }
 
+func (g *Game) getInput(m string) string {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Printf("%s\n", m)
+	fmt.Print("> ")
+	i, _ := reader.ReadString('\n')
+	i = strings.TrimSpace(i)
+
+	return i
+
+}
+
 func (g *Game) clearScreen() {
 	fmt.Print("\033[H\033[2J")
+}
+
+func (g *Game) getMove() int {
+	var i int
+	var err error
+	side := g.Config.CellsPerSide
+	for {
+		err, i = g.getInt("enter move")
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		if i >= side+1 {
+			fmt.Println("move invalid")
+			continue
+		}
+		break
+	}
+	if g.Turn == 1 {
+		return i - 1
+	} else {
+		return (side * 2) - (i - 1)
+	}
 }
